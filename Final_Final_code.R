@@ -108,8 +108,7 @@ cat("European Call Option Price:", european_price, "\n")
 
 # Early Exercise Value (simulated as Bermudan - European)
 european_price - bermudan_price$bermudan_price
-((european_price - bermudan_price$bermudan_price)/bermudan_price$bermudan_price) * 100
-
+((european_price - bermudan_price$bermudan_price)/bermudan_price$bermudan_price) * 100 # early exercise in procentage
 
 # standard error for Bermudan
 sd(bermudan_price$disc_cashflow) / sqrt(npaths)
