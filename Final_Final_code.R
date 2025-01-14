@@ -102,13 +102,83 @@ black_scholes <- function(S0, K, T, r, sigma) {
 
 european_price <- black_scholes(S0, K, T, r, sigma)
 
+
+
+#################################### Binomial ##################################
+binomial_model <- function(S0, K, r, T, sigma, nsteps, option_type = "call") {
+  # Parameters
+  dt <- T / nsteps
+  u <- exp(sigma * sqrt(dt))    # Up factor
+  d <- 1 / u                   # Down factor
+  p <- (exp(r * dt) - d) / (u - d) # Risk-neutral probability
+  discount <- exp(-r * dt) # For discounted payoff
+  
+  # Initialize stock price tree
+  stock_tree <- matrix(0, nrow = nsteps + 1, ncol = nsteps + 1)
+  for (i in 0:nsteps) {
+    for (j in 0:i) {
+      stock_tree[j + 1, i + 1] <- S0 * (u^j) * (d^(i - j))
+    }
+  }
+  
+  # Initialize option value tree
+  option_tree <- matrix(0, nrow = nsteps + 1, ncol = nsteps + 1)
+  
+  # Terminal payoffs
+  if (option_type == "call") {
+    option_tree[, nsteps + 1] <- pmax(stock_tree[, nsteps + 1] - K, 0)
+  } else {
+    option_tree[, nsteps + 1] <- pmax(K - stock_tree[, nsteps + 1], 0)
+  }
+  
+  # Backward induction for Bermudan option pricing
+  for (i in (nsteps):1) {
+    for (j in 0:(i - 1)) {
+      continuation_value <- discount * (p * option_tree[j + 2, i + 1] + 
+                                          (1 - p) * option_tree[j + 1, i + 1])
+      intrinsic_value <- if (option_type == "call") {
+        max(0, stock_tree[j + 1, i] - K)
+      } else {
+        max(0, K - stock_tree[j + 1, i])
+      }
+      option_tree[j + 1, i] <- max(intrinsic_value, continuation_value)
+    }
+  }
+  
+  # Initialize optimal stopping matrix
+  optimal_stopping <- matrix(0, nrow = nsteps + 1, ncol = nsteps + 1)
+  
+  # Extract the optimal stopping points
+  for (i in 1:nsteps) {  # Adjusted to match matrix dimensions
+    for (j in 1:i) {
+      continuation_value <- discount * (p * option_tree[j + 1, i + 1] + 
+                                          (1 - p) * option_tree[j, i + 1])
+      if (option_tree[j, i] > continuation_value) {
+        optimal_stopping[j, i] <- 1
+      }
+    }
+  }
+  
+  list(option_price = option_tree[1, 1], 
+       stock_tree = stock_tree, 
+       option_tree = option_tree,
+       optimal_stopping = optimal_stopping)
+}
+
+binomial_price <- binomial_model(S0, K, r, T, sigma, nsteps, option_type = "call")
+
 ################################## Comparison ##################################
 cat("Bermudan Call Option Price:", bermudan_price$bermudan_price)
 cat("European Call Option Price:", european_price, "\n")
+cat("Binomial Call Option Price:", binomial_price$option_price)
 
-# Early Exercise Value (simulated as Bermudan - European)
+# European Early Exercise Value (simulated as Bermudan - European)
 european_price - bermudan_price$bermudan_price
-((european_price - bermudan_price$bermudan_price)/bermudan_price$bermudan_price) * 100 # early exercise in procentage
+((european_price - bermudan_price$bermudan_price)/bermudan_price$bermudan_price) * 100
+
+# Binomial Early Exercise Value (simulated as Bermudan - binomial)
+binomial_price$option_price - bermudan_price$bermudan_price
+((binomial_price$option_price - bermudan_price$bermudan_price)/bermudan_price$bermudan_price) * 100
 
 # standard error for Bermudan
 sd(bermudan_price$disc_cashflow) / sqrt(npaths)
